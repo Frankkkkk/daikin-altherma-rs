@@ -21,14 +21,31 @@ pub struct DaikinAlthermaClient {
 
 #[derive(Debug)]
 pub struct TankParameters {
-    // The current temperature of the water tank
-    temperature: f64,
-    // The setpoint (wanted) temperature of the water tank
-    setpoint_temperature: f64,
+    // The current temperature of the water tank, in °C
+    pub temperature: f64,
+    // The setpoint (wanted) temperature of the water tank, in °C
+    pub setpoint_temperature: f64,
     // Is the tank heating enabled
-    enabled: bool,
+    pub enabled: bool,
     // Is it on powerful (quick heating) mode
-    powerful: bool,
+    pub powerful: bool,
+}
+
+#[derive(Debug)]
+pub struct HeatingParameters {
+    // The current indoor temperature, in °C
+    pub indoor_temperature: f64,
+    // The current outdoor temperature, in °C
+    pub outdoor_temperature: f64,
+    // The current indoor setpoint (target) temperature, in °C
+    pub indoor_setpoint_temperature: f64,
+    // The leaving water temperature, in °C
+    pub leaving_water_temperature: f64,
+
+    // Is the heating enabled
+    pub enabled: bool,
+    // Is it on powerful (quick heating) mode
+    //mode: ,
 }
 
 trait FromJsonValue<T>: Sized {
@@ -140,6 +157,34 @@ impl DaikinAlthermaClient {
             setpoint_temperature,
             enabled: enabled_str == "on",
             powerful: powerful_i == 1,
+        })
+    }
+
+    pub fn get_heating_parameters(&mut self) -> Result<HeatingParameters, DAError> {
+        let indoor_temperature: f64 = self
+            .request_value_hp_dft("1/Sensor/IndoorTemperature/la")
+            .unwrap();
+
+        let outdoor_temperature: f64 = self
+            .request_value_hp_dft("1/Sensor/OutdoorTemperature/la")
+            .unwrap();
+
+        let indoor_setpoint_temperature: f64 = self
+            .request_value_hp_dft("1/Operation/TargetTemperature/la")
+            .unwrap();
+
+        let leaving_water_temperature: f64 = self
+            .request_value_hp_dft("1/Sensor/LeavingWaterTemperatureCurrent/la")
+            .unwrap();
+
+        let enabled_str: String = self.request_value_hp_dft("1/Operation/Power/la").unwrap();
+
+        Ok(HeatingParameters {
+            indoor_temperature,
+            outdoor_temperature,
+            indoor_setpoint_temperature,
+            leaving_water_temperature,
+            enabled: enabled_str == "on",
         })
     }
 
