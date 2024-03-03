@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 serde_json = "1.0.114"
+thiserror = "1.0.57"
 tungstenite = "0.21.0"
 url = "2.5.0"
 

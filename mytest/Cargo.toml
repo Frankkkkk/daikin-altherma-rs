@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 daikin_altherma = {path = "/home/frank/src/github.com/frankkkkk/daikin-altherma-rs/"}
+thiserror = "1.0.57"

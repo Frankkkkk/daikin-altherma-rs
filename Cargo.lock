@@ -53,6 +53,7 @@ name = "daikin_altherma"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "thiserror",
  "tungstenite",
  "url",
  "uuid",
@@ -160,6 +161,7 @@ name = "mytest"
 version = "0.1.0"
 dependencies = [
  "daikin_altherma",
+ "thiserror",
 ]
 
 [[package]]
