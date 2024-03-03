@@ -7,12 +7,17 @@ fn main() {
 
     //a.set_holiday_mode(false);
 
-    let hm = a.is_holiday_mode();
-    println!("Holiday mode: {hm}");
+    //#   let hm = a.is_holiday_mode();
+    //#   println!("Holiday mode: {hm}");
 
     let tp = a.get_tank_parameters().unwrap();
     println!("Tank: {:?}", tp);
 
-    let hp = a.get_heating_parameters().unwrap();
-    println!("Heating: {:?}", hp);
+    a.set_tank_powerful(true);
+
+    let tp = a.get_tank_parameters().unwrap();
+    println!("Tank: {:?}", tp);
+
+    //let hp = a.get_heating_parameters().unwrap();
+    //println!("Heating: {:?}", hp);
 }

@@ -12,38 +12,45 @@ pub enum DAError {
     CommunicationError,
     #[error("Conversion error")]
     ConversionError,
+    #[error("Set value error")]
+    SetValueError(String),
+    #[error("No such field")]
+    NoSuchFieldError,
 }
 
 pub struct DaikinAlthermaClient {
-    //todo WS con
     ws_client: WebSocket<stream::MaybeTlsStream<TcpStream>>,
 }
 
+//
 #[derive(Debug)]
 pub struct TankParameters {
-    // The current temperature of the water tank, in °C
+    /// The current temperature of the water tank, in °C
     pub temperature: f64,
-    // The setpoint (wanted) temperature of the water tank, in °C
+    /// The setpoint (wanted) temperature of the water tank, in °C
     pub setpoint_temperature: f64,
-    // Is the tank heating enabled
+    /// Is the tank heating enabled
     pub enabled: bool,
-    // Is it on powerful (quick heating) mode
+    /// Is it on powerful (quick heating) mode
     pub powerful: bool,
 }
 
 #[derive(Debug)]
 pub struct HeatingParameters {
-    // The current indoor temperature, in °C
+    /// The current indoor temperature, in °C
     pub indoor_temperature: f64,
-    // The current outdoor temperature, in °C
+    /// The current outdoor temperature, in °C
     pub outdoor_temperature: f64,
-    // The current indoor setpoint (target) temperature, in °C
+    /// The current indoor setpoint (target) temperature, in °C
     pub indoor_setpoint_temperature: f64,
-    // The leaving water temperature, in °C
+    /// The leaving water temperature, in °C
     pub leaving_water_temperature: f64,
 
-    // Is the heating enabled
+    /// Is the heating enabled
     pub enabled: bool,
+
+    /// Is the heating on holiday (disabled)
+    pub on_holiday: bool,
     // Is it on powerful (quick heating) mode
     //mode: ,
 }
@@ -97,6 +104,7 @@ impl FromJsonValue<bool> for bool {
 }
 
 impl DaikinAlthermaClient {
+    /// Creates a new client to a Daikin Altherma LAN adapter.
     pub fn new(adapter_hostname: String) -> Self {
         let url_str = format!("ws://{adapter_hostname}/mca");
         let url = Url::parse(&url_str).unwrap();
@@ -106,36 +114,13 @@ impl DaikinAlthermaClient {
         }
     }
 
+    /// Returns the model of the LAN adapter. E.g. BRP069A61
     pub fn get_adapter_model(&mut self) -> String {
         let v = self
             .request_value("MNCSE-node/deviceInfo", None, "/m2m:rsp/pc/m2m:dvi/mod")
             .unwrap();
 
         return v.as_str().unwrap().to_string();
-    }
-
-    pub fn is_holiday_mode(&mut self) -> bool {
-        let v: i64 = self
-            .request_value_hp_dft("1/Holiday/HolidayState/la")
-            .unwrap();
-
-        return v == 1;
-    }
-
-    pub fn set_holiday_mode(&mut self, holiday_mode: bool) -> Result<(), DAError> {
-        let value = match holiday_mode {
-            true => 1,
-            false => 0,
-        };
-
-        let payload = serde_json::json!({
-        "con": value,
-        "cnf": "text/plain:0"
-        });
-
-        self.set_value_hp("1/Holiday/HolidayState", Some(payload), "/")
-            .unwrap();
-        Ok(())
     }
 
     pub fn get_tank_parameters(&mut self) -> Result<TankParameters, DAError> {
@@ -160,6 +145,40 @@ impl DaikinAlthermaClient {
         })
     }
 
+    /// Enables or disables the tank heating
+    pub fn set_tank_enabled(&mut self, enabled: bool) -> Result<(), DAError> {
+        let value = match enabled {
+            true => "on",
+            false => "off",
+        };
+
+        let payload = serde_json::json!({
+        "con": value,
+        "cnf": "text/plain:0"
+        });
+
+        self.set_value_hp("2/Operation/Power", Some(payload), "/")
+            .unwrap();
+        Ok(())
+    }
+
+    /// Enables or disable the tank powerful mode
+    pub fn set_tank_powerful(&mut self, powerful: bool) -> Result<(), DAError> {
+        let value = match powerful {
+            true => 1,
+            false => 0,
+        };
+
+        let payload = serde_json::json!({
+        "con": value,
+        "cnf": "text/plain:0"
+        });
+
+        self.set_value_hp("2/Operation/Powerful", Some(payload), "/")
+            .unwrap();
+        Ok(())
+    }
+
     pub fn get_heating_parameters(&mut self) -> Result<HeatingParameters, DAError> {
         let indoor_temperature: f64 = self
             .request_value_hp_dft("1/Sensor/IndoorTemperature/la")
@@ -179,13 +198,63 @@ impl DaikinAlthermaClient {
 
         let enabled_str: String = self.request_value_hp_dft("1/Operation/Power/la").unwrap();
 
+        let on_holiday: i64 = self
+            .request_value_hp_dft("1/Holiday/HolidayState/la")
+            .unwrap();
+
         Ok(HeatingParameters {
             indoor_temperature,
             outdoor_temperature,
             indoor_setpoint_temperature,
             leaving_water_temperature,
             enabled: enabled_str == "on",
+            on_holiday: on_holiday == 1,
         })
+    }
+
+    pub fn set_holiday_mode(&mut self, holiday_mode: bool) -> Result<(), DAError> {
+        let value = match holiday_mode {
+            true => 1,
+            false => 0,
+        };
+
+        let payload = serde_json::json!({
+        "con": value,
+        "cnf": "text/plain:0"
+        });
+
+        self.set_value_hp("1/Holiday/HolidayState", Some(payload), "/")
+            .unwrap();
+        Ok(())
+    }
+
+    /// Sets the heating setpoint (target) temperature, in °C
+    pub fn set_heating_setpoint_temperature(&mut self, temperature: f64) -> Result<(), DAError> {
+        let payload = serde_json::json!({
+        "con": temperature,
+        "cnf": "text/plain:0"
+        });
+
+        self.set_value_hp("1/Operation/TargetTemperature", Some(payload), "/")
+            .unwrap();
+        Ok(())
+    }
+
+    /// Enables or disables the heating
+    pub fn set_heating_enabled(&mut self, is_enabled: bool) -> Result<(), DAError> {
+        let value = match is_enabled {
+            true => "on",
+            false => "standby",
+        };
+
+        let payload = serde_json::json!({
+        "con": value,
+        "cnf": "text/plain:0"
+        });
+
+        self.set_value_hp("1/Operation/Power", Some(payload), "/")
+            .unwrap();
+        Ok(())
     }
 
     fn request_value_hp_dft<T: FromJsonValue<T>>(&mut self, item: &str) -> Result<T, DAError> {
@@ -203,8 +272,13 @@ impl DaikinAlthermaClient {
         output_path: &str,
     ) -> Result<(), DAError> {
         let hp_item = format!("MNAE/{item}");
-        self.request_value(hp_item.as_str(), payload, output_path)
-            .unwrap();
+        self.request_value(hp_item.as_str(), payload, output_path);
+        /*
+        match result {
+            Ok(x) => Ok(()),
+            Err(x) => Err(x),
+        }
+        */
         Ok(())
     }
 
@@ -213,7 +287,7 @@ impl DaikinAlthermaClient {
         item: &str,
         payload: Option<Value>,
         output_path: &str,
-    ) -> Result<Value, String> {
+    ) -> Result<Value, DAError> {
         let reqid = Uuid::new_v4().to_string();
 
         let mut js_request = json!({
@@ -239,6 +313,8 @@ impl DaikinAlthermaClient {
                 .extend(set_value_params.as_object().unwrap().clone());
         }
 
+        println!(">>> {js_request}");
+
         self.ws_client
             .send(Message::Text(js_request.to_string()))
             .expect("Can't write message");
@@ -251,14 +327,13 @@ impl DaikinAlthermaClient {
 
         let result: Value = serde_json::from_str(&msg).expect("Can't parse JSON");
 
-        //println!(">>> {result}");
-
         assert_eq!(result["m2m:rsp"]["rqi"], reqid);
         assert_eq!(result["m2m:rsp"]["to"], "hello"); //XXX
                                                       //
+        println!("<<< {result}");
         match result.pointer(output_path) {
             Some(v) => Ok(v.clone()),
-            None => Err("Todo".to_string()),
+            None => Err(DAError::NoSuchFieldError),
         }
     }
 }
