@@ -3,6 +3,16 @@ workspace = { members = ["mytest"] }
 name = "daikin_altherma"
 version = "0.0.1"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "A client for Daikin Altherma LAN adapters"
+documentation = "https://docs.rs/daikin_altherma"
+homepage = "https://github.com/Frankkkkk/daikin-altherma-rs"
+repository = "https://github.com/Frankkkkk/daikin-altherma-rs"
+keywords = ["daikin", "altherma", "BRP069A61", "BRP069A62"]
+categories = ["API bindings"]
+
+
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,4 +23,5 @@ tungstenite = "0.21.0"
 url = "2.5.0"
 
 [dependencies.uuid]
+version = "1.7.0"
 features = ["v4"]
