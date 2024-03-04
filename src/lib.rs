@@ -1,4 +1,12 @@
-use std::{fmt::Debug, net::TcpStream};
+//! # API to Daikin Altherma LAN Adapters
+//!
+//! This rust crate interfaces with Daikin Altherma LAN adapters.
+//! There are two firmware versions of the LAN adapters:
+//! - Cloud connected
+//! - LAN only
+//! This library only supports the second one for the moment.
+
+use std::net::TcpStream;
 use uuid::Uuid;
 
 use serde_json::{json, Value};
@@ -8,9 +16,9 @@ use url::Url;
 mod errors;
 mod params;
 mod traits;
-use crate::errors::DAError;
-use crate::params::HeatingParameters;
-use crate::params::TankParameters;
+pub use crate::errors::DAError;
+pub use crate::params::HeatingParameters;
+pub use crate::params::TankParameters;
 
 pub struct DaikinAlthermaClient {
     ws_client: WebSocket<stream::MaybeTlsStream<TcpStream>>,

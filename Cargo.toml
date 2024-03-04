@@ -1,4 +1,3 @@
-workspace = { members = ["mytest"] }
 [package]
 name = "daikin_altherma"
 version = "0.0.1"
@@ -25,3 +24,6 @@ url = "2.5.0"
 [dependencies.uuid]
 version = "1.7.0"
 features = ["v4"]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
