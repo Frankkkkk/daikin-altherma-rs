@@ -1,97 +1,19 @@
-use std::{error::Error, fmt::Debug, net::TcpStream};
-use thiserror::Error;
+use std::{fmt::Debug, net::TcpStream};
 use uuid::Uuid;
 
 use serde_json::{json, Value};
 use tungstenite::{connect, stream, Message, WebSocket};
 use url::Url;
 
-#[derive(Error, Debug)]
-pub enum DAError {
-    #[error("Communication error")]
-    CommunicationError,
-    #[error("Conversion error")]
-    ConversionError,
-    #[error("Set value error")]
-    SetValueError(String),
-    #[error("No such field")]
-    NoSuchFieldError,
-    #[error("Value conversion error")]
-    ValueConversionError,
-    #[error("Url Parse error")]
-    UrlParseError,
-    #[error("WebSocket Error")]
-    WebSocketError,
-}
+mod errors;
+mod params;
+mod traits;
+use crate::errors::DAError;
+use crate::params::HeatingParameters;
+use crate::params::TankParameters;
 
 pub struct DaikinAlthermaClient {
     ws_client: WebSocket<stream::MaybeTlsStream<TcpStream>>,
-}
-
-//
-#[derive(Debug)]
-pub struct TankParameters {
-    /// The current temperature of the water tank, in °C
-    pub temperature: f64,
-    /// The setpoint (wanted) temperature of the water tank, in °C
-    pub setpoint_temperature: f64,
-    /// Is the tank heating enabled
-    pub enabled: bool,
-    /// Is it on powerful (quick heating) mode
-    pub powerful: bool,
-}
-
-#[derive(Debug)]
-pub struct HeatingParameters {
-    /// The current indoor temperature, in °C
-    pub indoor_temperature: f64,
-    /// The current outdoor temperature, in °C
-    pub outdoor_temperature: f64,
-    /// The current indoor setpoint (target) temperature, in °C
-    pub indoor_setpoint_temperature: f64,
-    /// The leaving water temperature, in °C
-    pub leaving_water_temperature: f64,
-
-    /// Is the heating enabled
-    pub enabled: bool,
-
-    /// Is the heating on holiday (disabled)
-    pub on_holiday: bool,
-    // Is it on powerful (quick heating) mode
-    //mode: ,
-}
-
-trait FromJsonValue<T>: Sized {
-    fn from_json_value(value: &Value) -> Result<T, DAError>;
-}
-
-// Implement the trait for i64
-impl FromJsonValue<i64> for i64 {
-    fn from_json_value(value: &Value) -> Result<Self, DAError> {
-        value.as_i64().ok_or(DAError::ValueConversionError)
-    }
-}
-
-// Implement the trait for f64
-impl FromJsonValue<f64> for f64 {
-    fn from_json_value(value: &Value) -> Result<Self, DAError> {
-        value.as_f64().ok_or(DAError::ValueConversionError)
-    }
-}
-
-// Implement the trait for String
-impl FromJsonValue<String> for String {
-    fn from_json_value(value: &Value) -> Result<Self, DAError> {
-        let v = value.as_str().ok_or(DAError::ValueConversionError)?;
-        Ok(v.to_string())
-    }
-}
-
-// Implement the trait for bool
-impl FromJsonValue<bool> for bool {
-    fn from_json_value(value: &Value) -> Result<Self, DAError> {
-        value.as_bool().ok_or(DAError::ValueConversionError)
-    }
 }
 
 impl DaikinAlthermaClient {
@@ -228,7 +150,10 @@ impl DaikinAlthermaClient {
         self.set_value_hp("1/Operation/Power", Some(payload), "/")
     }
 
-    fn request_value_hp_dft<T: FromJsonValue<T>>(&mut self, item: &str) -> Result<T, DAError> {
+    fn request_value_hp_dft<T: traits::FromJsonValue<T>>(
+        &mut self,
+        item: &str,
+    ) -> Result<T, DAError> {
         let hp_item = format!("MNAE/{item}");
         let json_val = self.request_value(hp_item.as_str(), None, "/m2m:rsp/pc/m2m:cin/con")?;
         T::from_json_value(&json_val)

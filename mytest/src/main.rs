@@ -18,6 +18,6 @@ fn main() {
     let tp = a.get_tank_parameters().unwrap();
     println!("Tank: {:?}", tp);
 
-    //let hp = a.get_heating_parameters().unwrap();
-    //println!("Heating: {:?}", hp);
+    let hp = a.get_heating_parameters().unwrap();
+    println!("Heating: {:?}", hp);
 }
