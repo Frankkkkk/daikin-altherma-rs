@@ -1,4 +1,4 @@
-use std::{fmt::Debug, net::TcpStream};
+use std::{error::Error, fmt::Debug, net::TcpStream};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -16,6 +16,12 @@ pub enum DAError {
     SetValueError(String),
     #[error("No such field")]
     NoSuchFieldError,
+    #[error("Value conversion error")]
+    ValueConversionError,
+    #[error("Url Parse error")]
+    UrlParseError,
+    #[error("WebSocket Error")]
+    WebSocketError,
 }
 
 pub struct DaikinAlthermaClient {
@@ -62,80 +68,62 @@ trait FromJsonValue<T>: Sized {
 // Implement the trait for i64
 impl FromJsonValue<i64> for i64 {
     fn from_json_value(value: &Value) -> Result<Self, DAError> {
-        let v: Option<i64> = value.as_i64();
-        match v {
-            Some(x) => Ok(x),
-            _ => Err(DAError::ConversionError),
-        }
+        value.as_i64().ok_or(DAError::ValueConversionError)
     }
 }
 
 // Implement the trait for f64
 impl FromJsonValue<f64> for f64 {
     fn from_json_value(value: &Value) -> Result<Self, DAError> {
-        let v: Option<f64> = value.as_f64();
-        match v {
-            Some(x) => Ok(x),
-            _ => Err(DAError::ConversionError),
-        }
+        value.as_f64().ok_or(DAError::ValueConversionError)
     }
 }
 
 // Implement the trait for String
 impl FromJsonValue<String> for String {
     fn from_json_value(value: &Value) -> Result<Self, DAError> {
-        let v: Option<&str> = value.as_str();
-        match v {
-            Some(x) => Ok(x.to_string()),
-            _ => Err(DAError::ConversionError),
-        }
+        let v = value.as_str().ok_or(DAError::ValueConversionError)?;
+        Ok(v.to_string())
     }
 }
 
 // Implement the trait for bool
 impl FromJsonValue<bool> for bool {
     fn from_json_value(value: &Value) -> Result<Self, DAError> {
-        let v: Option<bool> = value.as_bool();
-        match v {
-            Some(x) => Ok(x),
-            _ => Err(DAError::ConversionError),
-        }
+        value.as_bool().ok_or(DAError::ValueConversionError)
     }
 }
 
 impl DaikinAlthermaClient {
     /// Creates a new client to a Daikin Altherma LAN adapter.
-    pub fn new(adapter_hostname: String) -> Self {
+    pub fn new(adapter_hostname: String) -> Result<Self, DAError> {
         let url_str = format!("ws://{adapter_hostname}/mca");
-        let url = Url::parse(&url_str).unwrap();
-        let ws_client = connect(url).unwrap();
-        DaikinAlthermaClient {
+        let url = Url::parse(&url_str).map_err(|_| DAError::UrlParseError)?;
+        let ws_client = connect(url).map_err(|_| DAError::WebSocketError)?;
+
+        Ok(DaikinAlthermaClient {
             ws_client: ws_client.0,
-        }
+        })
     }
 
     /// Returns the model of the LAN adapter. E.g. BRP069A61
-    pub fn get_adapter_model(&mut self) -> String {
-        let v = self
-            .request_value("MNCSE-node/deviceInfo", None, "/m2m:rsp/pc/m2m:dvi/mod")
-            .unwrap();
+    pub fn get_adapter_model(&mut self) -> Result<String, DAError> {
+        let v = self.request_value("MNCSE-node/deviceInfo", None, "/m2m:rsp/pc/m2m:dvi/mod")?;
 
-        return v.as_str().unwrap().to_string();
+        match v.as_str() {
+            Some(x) => Ok(x.to_string()),
+            None => Err(DAError::NoSuchFieldError),
+        }
     }
 
     pub fn get_tank_parameters(&mut self) -> Result<TankParameters, DAError> {
-        let temperature: f64 = self
-            .request_value_hp_dft("2/Sensor/TankTemperature/la")
-            .unwrap();
+        let temperature: f64 = self.request_value_hp_dft("2/Sensor/TankTemperature/la")?;
 
-        let setpoint_temperature: f64 = self
-            .request_value_hp_dft("2/Operation/TargetTemperature/la")
-            .unwrap();
+        let setpoint_temperature: f64 =
+            self.request_value_hp_dft("2/Operation/TargetTemperature/la")?;
 
-        let enabled_str: String = self.request_value_hp_dft("2/Operation/Power/la").unwrap();
-        let powerful_i: i64 = self
-            .request_value_hp_dft("2/Operation/Powerful/la")
-            .unwrap();
+        let enabled_str: String = self.request_value_hp_dft("2/Operation/Power/la")?;
+        let powerful_i: i64 = self.request_value_hp_dft("2/Operation/Powerful/la")?;
 
         Ok(TankParameters {
             temperature,
@@ -158,8 +146,6 @@ impl DaikinAlthermaClient {
         });
 
         self.set_value_hp("2/Operation/Power", Some(payload), "/")
-            .unwrap();
-        Ok(())
     }
 
     /// Enables or disable the tank powerful mode
@@ -175,32 +161,23 @@ impl DaikinAlthermaClient {
         });
 
         self.set_value_hp("2/Operation/Powerful", Some(payload), "/")
-            .unwrap();
-        Ok(())
     }
 
     pub fn get_heating_parameters(&mut self) -> Result<HeatingParameters, DAError> {
-        let indoor_temperature: f64 = self
-            .request_value_hp_dft("1/Sensor/IndoorTemperature/la")
-            .unwrap();
+        let indoor_temperature: f64 = self.request_value_hp_dft("1/Sensor/IndoorTemperature/la")?;
 
-        let outdoor_temperature: f64 = self
-            .request_value_hp_dft("1/Sensor/OutdoorTemperature/la")
-            .unwrap();
+        let outdoor_temperature: f64 =
+            self.request_value_hp_dft("1/Sensor/OutdoorTemperature/la")?;
 
-        let indoor_setpoint_temperature: f64 = self
-            .request_value_hp_dft("1/Operation/TargetTemperature/la")
-            .unwrap();
+        let indoor_setpoint_temperature: f64 =
+            self.request_value_hp_dft("1/Operation/TargetTemperature/la")?;
 
-        let leaving_water_temperature: f64 = self
-            .request_value_hp_dft("1/Sensor/LeavingWaterTemperatureCurrent/la")
-            .unwrap();
+        let leaving_water_temperature: f64 =
+            self.request_value_hp_dft("1/Sensor/LeavingWaterTemperatureCurrent/la")?;
 
-        let enabled_str: String = self.request_value_hp_dft("1/Operation/Power/la").unwrap();
+        let enabled_str: String = self.request_value_hp_dft("1/Operation/Power/la")?;
 
-        let on_holiday: i64 = self
-            .request_value_hp_dft("1/Holiday/HolidayState/la")
-            .unwrap();
+        let on_holiday: i64 = self.request_value_hp_dft("1/Holiday/HolidayState/la")?;
 
         Ok(HeatingParameters {
             indoor_temperature,
@@ -224,8 +201,6 @@ impl DaikinAlthermaClient {
         });
 
         self.set_value_hp("1/Holiday/HolidayState", Some(payload), "/")
-            .unwrap();
-        Ok(())
     }
 
     /// Sets the heating setpoint (target) temperature, in °C
@@ -236,8 +211,6 @@ impl DaikinAlthermaClient {
         });
 
         self.set_value_hp("1/Operation/TargetTemperature", Some(payload), "/")
-            .unwrap();
-        Ok(())
     }
 
     /// Enables or disables the heating
@@ -253,15 +226,11 @@ impl DaikinAlthermaClient {
         });
 
         self.set_value_hp("1/Operation/Power", Some(payload), "/")
-            .unwrap();
-        Ok(())
     }
 
     fn request_value_hp_dft<T: FromJsonValue<T>>(&mut self, item: &str) -> Result<T, DAError> {
         let hp_item = format!("MNAE/{item}");
-        let json_val = self
-            .request_value(hp_item.as_str(), None, "/m2m:rsp/pc/m2m:cin/con")
-            .unwrap();
+        let json_val = self.request_value(hp_item.as_str(), None, "/m2m:rsp/pc/m2m:cin/con")?;
         T::from_json_value(&json_val)
     }
 
@@ -272,14 +241,8 @@ impl DaikinAlthermaClient {
         output_path: &str,
     ) -> Result<(), DAError> {
         let hp_item = format!("MNAE/{item}");
-        self.request_value(hp_item.as_str(), payload, output_path);
-        /*
-        match result {
-            Ok(x) => Ok(()),
-            Err(x) => Err(x),
-        }
-        */
-        Ok(())
+        self.request_value(hp_item.as_str(), payload, output_path)
+            .map(|_| ())
     }
 
     fn request_value(
@@ -313,8 +276,6 @@ impl DaikinAlthermaClient {
                 .extend(set_value_params.as_object().unwrap().clone());
         }
 
-        println!(">>> {js_request}");
-
         self.ws_client
             .send(Message::Text(js_request.to_string()))
             .expect("Can't write message");
@@ -329,8 +290,7 @@ impl DaikinAlthermaClient {
 
         assert_eq!(result["m2m:rsp"]["rqi"], reqid);
         assert_eq!(result["m2m:rsp"]["to"], "hello"); //XXX
-                                                      //
-        println!("<<< {result}");
+
         match result.pointer(output_path) {
             Some(v) => Ok(v.clone()),
             None => Err(DAError::NoSuchFieldError),

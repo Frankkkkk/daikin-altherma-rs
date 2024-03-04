@@ -1,6 +1,6 @@
 use daikin_altherma::DaikinAlthermaClient;
 fn main() {
-    let mut a = DaikinAlthermaClient::new("192.168.11.100".to_string());
+    let mut a = DaikinAlthermaClient::new("192.168.11.100".to_string()).unwrap();
     //    let am = a.get_adapter_model();
     //    println!("Adapter model: {am}");
     //
@@ -13,7 +13,7 @@ fn main() {
     let tp = a.get_tank_parameters().unwrap();
     println!("Tank: {:?}", tp);
 
-    a.set_tank_powerful(true);
+    a.set_tank_powerful(false);
 
     let tp = a.get_tank_parameters().unwrap();
     println!("Tank: {:?}", tp);
